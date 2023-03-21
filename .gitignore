@@ -130,3 +130,6 @@ dmypy.json
 
 # Self-defined contents
 sequence/
+database/
+tmp/
+figure/
