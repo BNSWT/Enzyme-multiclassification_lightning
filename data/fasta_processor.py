@@ -4,7 +4,7 @@ import pandas as pd
 from distfit import distfit
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
+# import seaborn as sns
 
 class FastaProcessor():
     def __init__(self, path=''):
@@ -19,7 +19,7 @@ class FastaProcessor():
     
     def distribution(self, data):
         plt.figure(figsize=(3,2))
-        sns.distplot(data)
+        # sns.distplot(data)
         plt.legend()
         plt.grid(linestyle='--')
         plt.savefig("/zhouyuyang/Enzyme-multiclassification_lightning/figure/distribution.png")
@@ -62,37 +62,48 @@ class FastaProcessor():
         # rebuild sequence data
         self.data_seq = [item for group in self.data_group.values() for item in group]
 
-    def sample(self, rate=0.25):
-        def sample_func(all_data):
-            min_data = []
-            other_data = []
+    def sample(self, ratio=0.25):
+        def sample_func(all_data, first=False):
+            min_data, other_data, left_df = [], [], []
             names = []
             cur_label = ''
-            left_df = []
             for row in all_data:
-                if row[0] != cur_label:
-                    cur_label=row[0]
-                    group_name = row[3]
-                    if not group_name in names:
-                        names.append(group_name)
-                        min_data+=[item for item in self.data_group[group_name]]
+                group_name = row[3]
+                if not group_name in names:
+                    names.append(group_name)
                 else:
-                    group_name = row[3]
-                    if not group_name in names:
-                        names.append(group_name)
-                        other_data+=[item for item in self.data_group[group_name]]
-                        left_df+=[data for data in all_data for item in self.data_group[group_name] if item[1]==data[1]]
+                    continue
+                if row[0] != cur_label and (len(self.data_group[group_name])>100 or first):
+                    cur_label=row[0]      
+                    min_data+=[item for item in self.data_group[group_name]]
+                else:
+                    other_data+=[item for item in self.data_group[group_name]]
+                    left_df+=[data for data in all_data for item in self.data_group[group_name] if item[1]==data[1]]
             return min_data, other_data, left_df
         all_data=[tuple(x) for x in self.filtered_data.values]
-        train_data=all_data
-        val_data=[]
-        while(len(val_data) < len(train_data)*rate):
-            added_val, train_data, all_data = sample_func(all_data)
-            val_data += added_val
+        val_data, train_data, left_df = sample_func(all_data, first=True)
+        while(len(val_data)<len(train_data)*ratio):
+            added_data, train_data, left_df = sample_func(left_df)
+            val_data += added_data
+        
+        
+        # train_data=all_data
+        # val_data=[]
+        # while(len(val_data) < len(train_data)*rate):
+        #     added_val, train_data, all_data = sample_func(all_data)
+        #     val_data += added_val
+            
+        train_data = sorted(train_data, key=lambda x:x[2])
+        val_data = sorted(val_data, key=lambda x:x[2])
+        
         pd.DataFrame(train_data).to_csv("train.txt", sep='\t', index=None)
         pd.DataFrame(val_data).to_csv("val.txt", sep='\t', index=None)
         
+        train_cnts = pd.Series([data[2] for data in train_data]).value_counts(sort=False)
+        pd.DataFrame(train_cnts).to_csv("train_cnt.txt", sep='\t')
         
+        val_cnts = pd.Series([data[2] for data in val_data]).value_counts(sort=False)
+        pd.DataFrame(val_cnts).to_csv("val_cnt.txt", sep='\t')
     def summarize(self):
         self.all_label_cnts = pd.Series([data[2] for data in self.data_seq]).value_counts()
         pd.DataFrame(self.all_label_cnts).to_csv("summary.txt", sep='\t')
